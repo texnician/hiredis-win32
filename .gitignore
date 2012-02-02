@@ -4,3 +4,15 @@
 /*.so
 /*.dylib
 /*.a
+*Debug/
+*Release/
+*.XML
+*.filters
+*.user
+*.opensdf
+*.sdf
+*.suo
+*ipch*
+win32/_UpgradeReport_Files/
+
+

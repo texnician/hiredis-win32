@@ -232,7 +232,12 @@ int redisContextConnectTcp(redisContext *c, const char *addr, int port, struct t
     int s;
     int blocking = (c->flags & REDIS_BLOCK);
     struct sockaddr_in sa;
-
+#ifdef HIREDIS_WIN
+    int ssa = sizeof(sa);
+    char buf[255];
+    snprintf(buf, 255, "%s:%d", addr, port);
+#endif
+    
     if ((s = redisCreateSocket(c,AF_INET)) < 0)
         return REDIS_ERR;
     if (redisSetBlocking(c,s,0) != REDIS_OK)
@@ -240,7 +245,11 @@ int redisContextConnectTcp(redisContext *c, const char *addr, int port, struct t
 
     sa.sin_family = AF_INET;
     sa.sin_port = htons(port);
+#ifdef HIREDIS_WIN
+    if (WSAStringToAddress(buf, AF_INET, NULL, (LPSOCKADDR)&sa, &ssa) == 0) {
+#else
     if (inet_pton(AF_INET, addr, &sa.sin_addr) == 0) {
+#endif      
         struct hostent *he;
 
         he = gethostbyname(addr);
@@ -253,7 +262,28 @@ int redisContextConnectTcp(redisContext *c, const char *addr, int port, struct t
         }
         memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
     }
-
+#ifdef HIREDIS_WIN
+    else {
+      int wserr = WSAGetLastError();
+      switch (wserr) {
+      case WSAEFAULT:
+        printf("The specified Address buffer is too small. Pass in a larger buffer.");
+        break;
+      case WSAEINVAL:
+        printf("Unable to translate the string into a sockaddr.");
+        break;
+      case WSANOTINITIALISED:
+        printf("ws2.dll has not been initialized. The application must first call WSAStartup before calling any Windows Sockets functions.");
+        break;
+      case WSA_NOT_ENOUGH_MEMORY:
+        printf("There was insufficient memory to perform the operation.");
+        break;
+      default:
+        break;
+      }
+    }
+#endif
+      
     if (connect(s, (struct sockaddr*)&sa, sizeof(sa)) == -1) {
         SETERRNO;
         if (errno == EINPROGRESS && !blocking) {
